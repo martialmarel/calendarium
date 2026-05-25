@@ -55,9 +55,11 @@ impl CalendarWidget {
         // Grille des jours
         let first_weekday = self.displayed_month.weekday().num_days_from_monday() as usize;
         let days_count = self.days_in_month();
+        let prev_days_count = self.days_in_prev_month();
 
         let accent = Color32::from_rgb(0, 100, 220);
-        let mut day = 1usize;
+        let muted = Color32::from_rgb(170, 170, 170);
+        let muted_weekend = Color32::from_rgb(210, 160, 160);
 
         Grid::new("cal_grid")
             .num_columns(7)
@@ -71,35 +73,57 @@ impl CalendarWidget {
                 for row in 0..rows {
                     for col in 0..7 {
                         let cell = row * 7 + col;
-                        if cell < first_weekday || day > days_count {
-                            ui.label(""); // cellule vide
+                        let is_weekend = col >= 5;
+
+                        let (display_day, in_current_month) = if cell < first_weekday {
+                            // Fin du mois précédent
+                            let d = prev_days_count - (first_weekday - cell) + 1;
+                            (d, false)
+                        } else if cell - first_weekday < days_count {
+                            (cell - first_weekday + 1, true)
                         } else {
-                            let is_today = {
-                                let d = NaiveDate::from_ymd_opt(
-                                    self.displayed_month.year(),
-                                    self.displayed_month.month(),
-                                    day as u32,
-                                );
-                                d == Some(self.today)
-                            };
-                            let is_weekend = col >= 5;
+                            // Début du mois suivant
+                            (cell - first_weekday - days_count + 1, false)
+                        };
 
-                            let text = RichText::new(day.to_string()).size(13.0);
-                            let text = if is_today {
-                                text.strong().color(Color32::WHITE).background_color(accent)
-                            } else if is_weekend {
-                                text.color(Color32::from_rgb(200, 70, 70))
-                            } else {
-                                text
-                            };
+                        let is_today = in_current_month && {
+                            let d = NaiveDate::from_ymd_opt(
+                                self.displayed_month.year(),
+                                self.displayed_month.month(),
+                                display_day as u32,
+                            );
+                            d == Some(self.today)
+                        };
 
-                            ui.add_sized([34.0, 32.0], egui::Label::new(text));
-                            day += 1;
-                        }
+                        let text = RichText::new(display_day.to_string()).size(13.0);
+                        let text = if is_today {
+                            text.strong().color(Color32::WHITE).background_color(accent)
+                        } else if !in_current_month {
+                            text.color(if is_weekend { muted_weekend } else { muted })
+                        } else if is_weekend {
+                            text.color(Color32::from_rgb(200, 70, 70))
+                        } else {
+                            text
+                        };
+
+                        ui.add_sized([34.0, 32.0], egui::Label::new(text));
                     }
                     ui.end_row();
                 }
             });
+    }
+
+    fn days_in_prev_month(&self) -> usize {
+        let (y, m) = (self.displayed_month.year(), self.displayed_month.month());
+        let first_prev = if m == 1 {
+            NaiveDate::from_ymd_opt(y - 1, 12, 1)
+        } else {
+            NaiveDate::from_ymd_opt(y, m - 1, 1)
+        }
+        .unwrap();
+        self.displayed_month
+            .signed_duration_since(first_prev)
+            .num_days() as usize
     }
 
     fn shift_month(&mut self, delta: i32) {
