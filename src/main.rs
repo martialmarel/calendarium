@@ -48,7 +48,7 @@ impl CalendarApp {
         let rgba = icon::build_icon(day);
         match tray_icon::Icon::from_rgba(rgba, icon::ICON_SIZE, icon::ICON_SIZE) {
             Ok(new_icon) => {
-                if let Err(e) = self._tray.set_icon(Some(new_icon)) {
+                if let Err(e) = self._tray.set_icon_with_as_template(Some(new_icon), true) {
                     warn!("set_icon a échoué: {e}");
                 }
             }
@@ -167,6 +167,7 @@ fn main() -> eframe::Result<()> {
 
     let tray = TrayIconBuilder::new()
         .with_icon(tray_icon)
+        .with_icon_as_template(true) // macOS : laisse le système teinter clair/sombre
         .with_tooltip("Calendrier")
         .build()
         .expect("Impossible de créer le tray icon");
