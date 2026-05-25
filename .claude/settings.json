@@ -34,7 +34,15 @@
       "Bash(echo \"PID=$!\")",
       "Bash(grep -rn \"with_assets\\\\|Assets\\\\|AssetSource\" /Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/196b925/crates/story/examples/*.rs | head -10 && echo \"---\" && find /Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8 -name \"assets*.rs\" -not -path \"*/target/*\" | head -5)",
       "Read(//Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/**)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(grep -rn \"pub fn .*visible\\\\|pub fn show\\\\|pub fn hide\\\\|set_visible\\\\|pub fn minimize\\\\|pub fn activate\\\\|WindowKind::\" /Users/martial/.cargo/git/checkouts/zed-a70e2ad075855582/a6780a5/crates/gpui/src/window.rs 2>/dev/null | head -20 && echo \"---PLATFORM---\" && grep -rn \"fn show\\\\|fn hide\\\\|set_visible\" /Users/martial/.cargo/git/checkouts/zed-a70e2ad075855582/a6780a5/crates/gpui_macos/src/macos.rs 2>/dev/null | head -10)",
+      "Read(//Users/martial/.cargo/git/checkouts/zed-a70e2ad075855582/a6780a5/crates/gpui/src/**)",
+      "Read(//Users/martial/.cargo/git/checkouts/zed-a70e2ad075855582/a6780a5/crates/gpui_macos/src/**)",
+      "Bash(echo \"running PID=$!\")",
+      "Bash(find /Users/martial/.cargo/git/checkouts/zed-a70e2ad075855582/a6780a5/crates/gpui_platform -name \"*.rs\" 2>/dev/null | head -5 && echo \"---\" && grep -rn \"pub fn run\\\\|fn application\\\\|finished_launching\" /Users/martial/.cargo/git/checkouts/zed-a70e2ad075855582/a6780a5/crates/gpui_platform/src/ 2>/dev/null | head -15)",
+      "Read(//Users/martial/.cargo/git/checkouts/zed-a70e2ad075855582/a6780a5/crates/gpui_platform/**)",
+      "Read(//Users/martial/.cargo/git/checkouts/zed-a70e2ad075855582/a6780a5/crates/gpui_platform/src/**)",
+      "Bash(grep -A1 '^name = \"objc\"$' Cargo.lock)"
     ],
     "additionalDirectories": [
       "/tmp"
