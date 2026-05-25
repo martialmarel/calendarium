@@ -180,14 +180,71 @@ Symptôme à retenir : **boutons fonctionnels mais invisibles** = assets manquan
 
 ---
 
-## 5. À mesurer / décider ensuite
+## 5. Étape 3 — câblage tray-icon → fenêtre GPUI
 
-- [ ] Étape 3 — câblage `tray-icon` → fenêtre GPUI (main thread macOS)
-- [ ] Translucidité fenêtre (équivalent `with_transparent(true)` + `with_has_shadow(false)`)
-- [ ] Pas de titlebar / traffic lights (menu bar dropdown style)
-- [ ] Click-outside-to-hide (équivalent de notre focus loss detection egui)
-- [ ] RSS au repos (process backgroundé, fenêtre cachée)
+### Modèle adopté
+
+Pas de show/hide d'une fenêtre persistante (GPUI n'expose pas vraiment cette
+API). À la place : **open/close** d'une fenêtre éphémère à chaque toggle.
+
+- Tray créé **dans** le callback `run()`, pas avant (sinon panic objc :
+  `Ivar platform not found on class NSApplication` car `tray-icon` initialise
+  NSApp avant que GPUI ne pose son ivar).
+- `mpsc::channel` pour les events tray, drainé par une `cx.spawn(...)` avec
+  `background_executor().timer(50ms)`.
+- Sur clic gauche : si une fenêtre existe → `window.remove_window()`, sinon
+  on l'ouvre avec `WindowKind::PopUp`, titlebar transparente, traffic lights
+  repoussés hors écran.
+
+### Frictions rencontrées
+
+| Friction | Cause | Résolution |
+|---|---|---|
+| Panic `Ivar platform not found on class NSApplication` au démarrage | Tray créé AVANT GPUI : `tray-icon` initialise NSApp, GPUI veut ensuite poser un ivar `platform` sur la classe → conflit | Créer le tray DANS le callback `run()` |
+| Icône tray apparaît puis disparaît instantanément | `let _tray = build_tray()` est une locale du callback → droppé à la fin du callback → NSStatusItem retiré | Déplacer le tray dans la future `cx.spawn(async move)` qui vit jusqu'à la fin de l'app |
+| Fenêtre s'ouvre très à droite de l'écran | `tray-icon` retourne le rect en **pixels physiques**, GPUI veut des pixels logiques | Diviser par 2 (Retina). TODO : lire le vrai `backingScaleFactor` pour écrans externes non-2x |
+
+### Pièges fondamentaux (à graver)
+
+1. **Ordre d'initialisation des frameworks ObjC** : sur macOS, GPUI et
+   `tray-icon` se battent pour le contrôle de `NSApplication`. GPUI doit
+   gagner. Tray-icon doit être créé *après* l'init GPUI.
+2. **Durée de vie du `NSStatusItem`** : il disparaît dès que le wrapper
+   Rust est droppé. Tout ce qui interagit avec AppKit a une lifetime
+   visuelle — pas seulement mémoire.
+3. **Coordonnées hétérogènes** : `tray-icon` (physique) ↔ GPUI (logique).
+   Faux ami : tout est en `f64`/`Pixels`, mais pas la même unité.
+
+### API GPUI utile découverte
+
+- `WindowKind::PopUp` — fenêtre toujours au-dessus, sans dans la liste Cmd-Tab.
+- `TitlebarOptions { appears_transparent: true, traffic_light_position: Some(off-screen) }` — cache la titlebar.
+- `Window::remove_window()` — détruit la fenêtre (vs hide).
+- `cx.open_window(opts, |window, cx| Root::new(...))` — open async, retourne `WindowHandle`.
+- `WindowHandle::update(cx, |root, window, cx| ...)` — opérations sur la fenêtre depuis ailleurs.
+- `cx.spawn(async move |cx| ...)` + `background_executor().timer(d).await` — boucle de polling périodique propre.
+
+### Bilan code
+
+`src/bin/gpui_demo.rs` ~180 lignes pour reproduire la base de l'app egui :
+- Tray + icône dynamique (réutilise `icon::build_icon` via `#[path]`)
+- Toggle visibilité fenêtre
+- Position relative au tray
+
+Reste à porter : translucidité, click-outside, Escape, LSUIElement, refresh
+icône à minuit, performance hidden-state.
+
+---
+
+## 6. À mesurer / décider ensuite
+
+- [ ] Click-outside-to-hide (sur `WindowKind::PopUp`, voir `on_focus_out` /
+      `window.observe_blur` ou détection au niveau NSWindow)
+- [ ] Translucidité fenêtre (`WindowBackgroundAppearance::Transparent` côté
+      macOS — vérifier si suffisant pour effet vibrancy / blur)
+- [ ] Escape pour fermer
+- [ ] RSS au repos vs egui (mesure runtime)
 - [ ] Empreinte disque `target/` complet
-- [ ] Cmd-Q / menu / handler de fermeture
-- [ ] LSUIElement (pas d'icône Dock) — vérifier comportement GPUI
-- [ ] Re-mesurer taille binaire release **après** étape 3 (vraie comparaison)
+- [ ] Backing scale factor réel (écrans externes non-2x)
+- [ ] LSUIElement (pas d'icône Dock) — `bundle` ou Info.plist requis
+- [ ] Re-mesurer taille binaire release **avec** toutes les features câblées
