@@ -38,7 +38,7 @@ impl CalendarApp {
         let day = Local::now().day();
         debug!("refresh_icon: jour = {}", day);
         let rgba = icon::build_icon(day);
-        match tray_icon::Icon::from_rgba(rgba, 32, 32) {
+        match tray_icon::Icon::from_rgba(rgba, icon::ICON_SIZE, icon::ICON_SIZE) {
             Ok(new_icon) => {
                 if let Err(e) = self._tray.set_icon(Some(new_icon)) {
                     warn!("set_icon a échoué: {e}");
@@ -147,7 +147,7 @@ fn main() -> eframe::Result<()> {
     let rgba = icon::build_icon(day);
 
     let tray_icon =
-        tray_icon::Icon::from_rgba(rgba, 32, 32).expect("Impossible de créer l'icône tray");
+        tray_icon::Icon::from_rgba(rgba, icon::ICON_SIZE, icon::ICON_SIZE).expect("Impossible de créer l'icône tray");
 
     let tray = TrayIconBuilder::new()
         .with_icon(tray_icon)
