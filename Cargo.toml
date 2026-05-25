@@ -29,11 +29,12 @@ env_logger = { version = "0.11", optional = true }
 gpui = { git = "https://github.com/zed-industries/zed", optional = true }
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"], optional = true }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", optional = true }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component", optional = true }
 
 [features]
 default = ["logs"]
 logs = ["dep:env_logger"]
-gpui-experiment = ["dep:gpui", "dep:gpui_platform", "dep:gpui-component"]
+gpui-experiment = ["dep:gpui", "dep:gpui_platform", "dep:gpui-component", "dep:gpui-component-assets"]
 
 [patch.crates-io]
 psm = { git = "https://github.com/rust-lang/stacker", branch = "master" }

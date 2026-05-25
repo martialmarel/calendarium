@@ -1,8 +1,8 @@
-// GPUI hello-world experiment. Build with:
+// GPUI experiment. Build with:
 //   cargo run --bin gpui_demo --features gpui-experiment
 //
-// Étape 1: valider que le toolchain GPUI + gpui-component compile et qu'une
-// fenêtre s'ouvre. Pas encore de tray, pas encore de Calendar.
+// Étape 2: afficher le composant Calendar de gpui-component.
+// Pas encore de tray, pas encore de translucidité.
 
 #[cfg(not(feature = "gpui-experiment"))]
 fn main() {
@@ -12,33 +12,49 @@ fn main() {
 #[cfg(feature = "gpui-experiment")]
 mod app {
     use gpui::{
-        div, prelude::*, App, AppContext, Context, IntoElement, Render, Window, WindowOptions,
+        prelude::*, px, size, App, AppContext, Bounds, Context, Entity, IntoElement, Render,
+        Window, WindowBounds, WindowOptions,
     };
-    use gpui_component::Root;
+    use gpui_component::{
+        calendar::{Calendar, CalendarState},
+        v_flex, Root,
+    };
 
-    pub struct HelloWorld;
+    pub struct CalendarApp {
+        calendar: Entity<CalendarState>,
+    }
 
-    impl Render for HelloWorld {
+    impl CalendarApp {
+        fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+            Self {
+                calendar: cx.new(|cx| CalendarState::new(window, cx)),
+            }
+        }
+    }
+
+    impl Render for CalendarApp {
         fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-            div()
-                .flex()
-                .flex_col()
+            v_flex()
                 .size_full()
-                .items_center()
-                .justify_center()
-                .gap_2()
-                .child("Calendarium · GPUI experiment")
-                .child("Hello, World!")
+                .p_3()
+                .child(Calendar::new(&self.calendar))
         }
     }
 
     pub fn run() {
-        gpui_platform::application().run(move |cx: &mut App| {
+        gpui_platform::application()
+            .with_assets(gpui_component_assets::Assets)
+            .run(move |cx: &mut App| {
             gpui_component::init(cx);
 
+            let bounds = Bounds::centered(None, size(px(340.), px(340.)), cx);
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                ..Default::default()
+            };
             cx.spawn(async move |cx| {
-                cx.open_window(WindowOptions::default(), |window, cx| {
-                    let view = cx.new(|_| HelloWorld);
+                cx.open_window(options, |window, cx| {
+                    let view = cx.new(|cx| CalendarApp::new(window, cx));
                     cx.new(|cx| Root::new(view, window, cx))
                 })
                 .expect("Failed to open window");
