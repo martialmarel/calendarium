@@ -476,3 +476,65 @@ et qui poll 200ms quand visible.
       avec écran externe 1x)
 - [ ] Bundle `.app` propre pour distribution (Info.plist, signature)
 - [ ] Theme custom au lieu de muter le theme par défaut
+
+---
+
+## 11. Recommandation (opinion)
+
+> Section d'avis perso après l'expérimentation. À pondérer selon les
+> ambitions futures de l'app.
+
+**TL;DR : rester sur egui aujourd'hui, garder la branche `feat/try-gpui`
+parquée comme option future. La valeur la plus durable de cette
+exploration est ce journal.**
+
+### Pourquoi ne pas migrer maintenant
+
+**Le gain visuel est réel mais marginal pour ce scope.** Vibrancy, dark
+mode auto, rendu texte CoreText : objectivement supérieurs. Mais pour
+un picker de date 270×300 affiché 5 secondes par jour, l'utilisateur
+n'en parle plus après une semaine. Calendarium n'est pas Linear ou Sketch.
+
+**Les coûts sont permanents et structurels :**
+
+- 9.9 Go de `target/` vs ~600 Mo (×16). Multiplié par chaque clone, chaque
+  CI, chaque contributeur potentiel.
+- Cold build 10–20 min, barrière sérieuse à l'onboarding.
+- Git-dep sur Zed sans semver : à chaque bump c'est la roulette API. On
+  l'a vu en 3 endroits dans cette session (`Root::new` signature,
+  `window.focus` arity, theme override).
+- Xcode complet + Metal Toolchain comme pré-requis machine (~15 Go).
+- L'override `Theme.background` est un workaround fragile : il dépend d'un
+  champ qui peut changer de structure à n'importe quelle release de
+  gpui-component, sans warning compile.
+
+**Le RSS plus bas (44 vs 108 Mo) est séduisant** mais 60 Mo de RAM sur
+un Mac moderne, personne ne le voit en pratique. Pas un critère décisif
+pour un menu bar app.
+
+### Quand GPUI deviendrait décisif
+
+- **Scope qui s'élargit** : events iCal multi-jours, scrolling, animations,
+  search façon Spotlight → retained mode + Metal payent vraiment.
+- **Publication grand public** : l'effet vibrancy fait la différence en
+  screenshots et donne une impression "natif macOS" qu'egui ne peut pas
+  atteindre.
+- **Volonté de suivre l'écosystème Zed** par affinité technique.
+
+### Plan recommandé
+
+1. **Aujourd'hui** : ne merger ni `feat/try-gpui` ni rien, garder la
+   branche vivante. Le journal est l'artefact à conserver.
+2. **Dans 3-6 mois**, si l'app évolue, re-questionner — la branche est
+   à 80% de parité fonctionnelle, prête à reprendre.
+3. **Avant toute annonce publique** : reconsidérer sérieusement GPUI,
+   pour les screenshots.
+
+### Ce qui reste vrai indépendamment
+
+L'exploration a confirmé que **GPUI est viable techniquement** pour un
+menu bar app macOS, malgré son orientation "éditeur Zed". Les 6 pièges
+documentés (init order ObjC, lifetime NSStatusItem, coords physiques,
+assets, theme override, focus dispatch) sont réels mais surmontables
+en quelques heures. Si la décision de migrer arrive un jour, on sait
+exactement par où passer.
