@@ -19,13 +19,16 @@ mod app {
     use crate::icon;
     use chrono::{Datelike, Local};
     use gpui::{
-        point, prelude::*, px, size, App, AppContext, Bounds, Context, Entity, IntoElement, Point,
-        Render, TitlebarOptions, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+        actions, point, prelude::*, px, rgba, size, App, AppContext, Bounds, Context, Entity,
+        FocusHandle, Focusable, IntoElement, KeyBinding, Point, Render, TitlebarOptions, Window,
+        WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
     };
     use gpui_component::{
         calendar::{Calendar, CalendarState},
-        v_flex, Root,
+        v_flex, Root, Theme,
     };
+
+    actions!(calendarium, [Close]);
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::mpsc;
@@ -34,19 +37,36 @@ mod app {
 
     pub struct CalendarView {
         calendar: Entity<CalendarState>,
+        focus_handle: FocusHandle,
     }
 
     impl CalendarView {
         fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+            let focus_handle = cx.focus_handle();
+            // Donner le focus à notre view : sinon les key actions ne sont
+            // pas dispatchées car la fenêtre n'a aucun élément focus.
+            window.focus(&focus_handle, cx);
             Self {
                 calendar: cx.new(|cx| CalendarState::new(window, cx)),
+                focus_handle,
             }
+        }
+    }
+
+    impl Focusable for CalendarView {
+        fn focus_handle(&self, _: &App) -> FocusHandle {
+            self.focus_handle.clone()
         }
     }
 
     impl Render for CalendarView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             v_flex()
+                .track_focus(&self.focus_handle)
+                .key_context("CalendarView")
+                .on_action(|_: &Close, window, _cx| {
+                    window.remove_window();
+                })
                 .size_full()
                 .p_3()
                 .child(Calendar::new(&self.calendar))
@@ -87,6 +107,8 @@ mod app {
             kind: WindowKind::PopUp,
             is_resizable: false,
             is_movable: false,
+            // Vibrancy macOS (flou du contenu derrière la fenêtre).
+            window_background: WindowBackgroundAppearance::Blurred,
             ..Default::default()
         };
         cx.open_window(options, |window, cx| {
@@ -101,6 +123,14 @@ mod app {
             .with_assets(gpui_component_assets::Assets)
             .run(move |cx: &mut App| {
                 gpui_component::init(cx);
+
+                // Pour laisser passer la vibrancy macOS, on rend le background
+                // du theme global semi-transparent. Sinon `Root` (et tout ce
+                // qui utilise `theme.background`) peint par-dessus le NSVisualEffectView.
+                Theme::global_mut(cx).background = rgba(0xf5f7fa55).into();
+
+                // Bind Escape → action Close (gérée dans CalendarView).
+                cx.bind_keys([KeyBinding::new("escape", Close, None)]);
 
                 // Tray créé APRÈS l'init GPUI : sinon `tray-icon` initialise
                 // NSApplication d'une manière qui entre en conflit avec
@@ -198,7 +228,10 @@ mod app {
                                     a.handle
                                         .update(cx, |_, window, _| window.is_window_active())
                                         .map(|active| !active)
-                                        .unwrap_or(false)
+                                        // Si la fenêtre a été détruite ailleurs
+                                        // (ex: Escape), l'update échoue → on
+                                        // nettoie le slot en routant via close.
+                                        .unwrap_or(true)
                                 })
                                 .unwrap_or(false);
                             if should_close {
