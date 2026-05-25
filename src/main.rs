@@ -57,6 +57,14 @@ impl CalendarApp {
     }
 }
 
+/// Cache la fenêtre + libère les textures egui (atlas glyphes etc.) pour
+/// réduire l'empreinte mémoire en mode « fermé ». Les textures seront
+/// régénérées à la prochaine ouverture.
+fn hide(ctx: &egui::Context) {
+    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+    ctx.forget_all_images();
+}
+
 impl eframe::App for CalendarApp {
     /// Fond de framebuffer transparent : la translucidité du panel se compose
     /// alors directement sur le bureau.
@@ -109,7 +117,7 @@ impl eframe::App for CalendarApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             } else {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                hide(ctx);
             }
         }
 
@@ -117,7 +125,7 @@ impl eframe::App for CalendarApp {
         if self.visible && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             info!("Escape pressé → masquage");
             self.visible = false;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            hide(ctx);
         }
 
         // Fermer si la fenêtre perd le focus (clic en dehors).
@@ -132,11 +140,15 @@ impl eframe::App for CalendarApp {
             if self.frames_since_open > 20 && self.unfocused_frames > 3 {
                 info!("Perte du focus stable → masquage");
                 self.visible = false;
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                hide(ctx);
             }
         }
 
-        ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        // Timer de repaint uniquement quand visible. Quand cachée, c'est le
+        // tray-thread qui réveille le runloop via `ctx.request_repaint()`.
+        if self.visible {
+            ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        }
     }
 
     /// Rendu UI — eframe 0.34 ne l'appelle que quand la fenêtre est visible.
