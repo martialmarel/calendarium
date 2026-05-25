@@ -10,7 +10,7 @@ mod icon;
 const WIN_W: f32 = 270.0;
 const WIN_H: f32 = 300.0;
 /// Couleur de fond translucide du popup.
-const PANEL_BG: egui::Color32 = egui::Color32::from_rgba_unmultiplied_const(245, 247, 250, 220);
+const PANEL_BG: egui::Color32 = egui::Color32::from_rgba_unmultiplied_const(245, 247, 250, 240);
 /// Rayon des coins arrondis du popup.
 const PANEL_RADIUS: f32 = 12.0;
 
