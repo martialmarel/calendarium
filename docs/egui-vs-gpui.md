@@ -275,13 +275,50 @@ Coût : ~30 lignes de plus, aucune dépendance supplémentaire.
 
 ---
 
-## 7. À mesurer / décider ensuite
+## 7. Étape 5 — Escape & vibrancy
 
-- [ ] Translucidité fenêtre (`WindowBackgroundAppearance::Transparent` côté
-      macOS — vérifier si suffisant pour effet vibrancy / blur)
-- [ ] Escape pour fermer (équivalent du keystroke egui)
+### Escape
+
+Système d'actions GPUI : `actions!(scope, [Close])` génère un type, on lie
+la touche via `cx.bind_keys([KeyBinding::new("escape", Close, None)])`,
+et la view réagit avec `.on_action(|_: &Close, window, _cx| window.remove_window())`.
+
+Détail crucial : la view doit avoir un `FocusHandle` actif et appeler
+`window.focus(&handle, cx)` à son `new()` — sinon la fenêtre n'a aucun
+élément focus et le dispatcher de keys ne route rien.
+
+Le check d'activité du polling a été corrigé : `.unwrap_or(true)` (au lieu
+de `false`) pour qu'on nettoie bien le `slot` quand la fenêtre est détruite
+en dehors du flux (par Escape par exemple).
+
+### Vibrancy macOS
+
+Trois conditions à réunir :
+
+1. `WindowOptions { window_background: WindowBackgroundAppearance::Blurred, .. }` côté fenêtre — pose un `NSVisualEffectView` derrière le contenu.
+2. **Ne PAS** peindre de fond opaque par-dessus dans la view racine.
+3. **Override du theme global** — `gpui-component`'s `Root` peint inconditionnellement `.bg(cx.theme().background)` (ligne 504 de `root.rs`). Sans toucher au theme, on bouche tout. Solution : `Theme::global_mut(cx).background = rgba(0xf5f7fa55).into()` juste après `gpui_component::init(cx)`.
+
+Premier essai sans override theme : aucun effet (le fond opaque du Root
+masquait le NSVisualEffectView). Le piège est subtil parce que rien n'est
+en erreur — c'est juste invisible.
+
+Note : l'override theme côté light affecte aussi d'autres composants qui
+utilisent `theme.background`. Pour un bundle complet on voudra définir
+un theme custom plutôt que muter le theme par défaut, surtout pour aussi
+gérer le mode sombre.
+
+Rendu final : flou natif macOS derrière la fenêtre, texture comparable à
+NotificationCenter / Spotlight. Largement supérieur visuellement à notre
+fond solide en egui (qui peint un `Color32` translucide sans vrai blur).
+
+---
+
+## 8. À mesurer / décider ensuite
+
 - [ ] RSS au repos vs egui (mesure runtime)
 - [ ] Empreinte disque `target/` complet
 - [ ] Backing scale factor réel (écrans externes non-2x)
 - [ ] LSUIElement (pas d'icône Dock) — `bundle` ou Info.plist requis
 - [ ] Re-mesurer taille binaire release **avec** toutes les features câblées
+- [ ] Theme dark mode + override propre (pas de mutation du theme par défaut)
