@@ -877,12 +877,15 @@ dependencies = [
  "eframe",
  "egui",
  "env_logger",
+ "flume",
+ "futures",
  "gpui",
  "gpui-component",
  "gpui-component-assets",
  "gpui_platform",
  "image",
  "log",
+ "objc",
  "tray-icon",
 ]
 
