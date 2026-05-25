@@ -2,6 +2,9 @@
 name = "calendarium"
 version = "0.1.0"
 edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "macOS menu bar calendar — a Day-O replacement for Apple Silicon"
+repository = "https://github.com/martialmarel/calendarium"
 
 [dependencies]
 eframe = { version = "0.34", default-features = false, features = ["glow", "default_fonts"] }
