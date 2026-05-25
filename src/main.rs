@@ -1,6 +1,7 @@
 use chrono::{Datelike, Local};
 use eframe::egui;
 use log::{debug, info, warn};
+use std::sync::mpsc;
 use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 mod calendar;
@@ -8,6 +9,11 @@ mod icon;
 
 const WIN_W: f32 = 270.0;
 const WIN_H: f32 = 300.0;
+/// Couleur de fond translucide du popup. Équivalent prémultiplié de
+/// `from_rgba_unmultiplied(245, 247, 250, 150)`.
+const PANEL_BG: egui::Color32 = egui::Color32::from_rgba_unmultiplied_const(245, 247, 250, 150);
+/// Rayon des coins arrondis du popup.
+const PANEL_RADIUS: f32 = 12.0;
 
 struct CalendarApp {
     _tray: TrayIcon,
@@ -20,10 +26,12 @@ struct CalendarApp {
     unfocused_frames: u32,
     /// Frames écoulées depuis la dernière ouverture (grâce period).
     frames_since_open: u32,
+    /// Réception des évènements tray ré-émis par le thread de pompage.
+    tray_rx: mpsc::Receiver<TrayIconEvent>,
 }
 
 impl CalendarApp {
-    fn new(tray: TrayIcon) -> Self {
+    fn new(tray: TrayIcon, tray_rx: mpsc::Receiver<TrayIconEvent>) -> Self {
         Self {
             _tray: tray,
             calendar: calendar::CalendarWidget::new(),
@@ -31,6 +39,7 @@ impl CalendarApp {
             first_frame: true,
             unfocused_frames: 0,
             frames_since_open: 0,
+            tray_rx,
         }
     }
 
@@ -50,23 +59,28 @@ impl CalendarApp {
 }
 
 impl eframe::App for CalendarApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    /// Fond de framebuffer transparent : la translucidité du panel se compose
+    /// alors directement sur le bureau.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
+    }
+
+    /// Logique non-UI : toujours appelée par eframe 0.34, même quand la fenêtre
+    /// est `Visible(false)`. C'est ici qu'on traite les évènements tray pour
+    /// pouvoir rouvrir la fenêtre après fermeture.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.first_frame {
             self.first_frame = false;
-            info!("Première frame: masquage initial de la fenêtre");
+            info!("Première frame");
+            // Masque la fenêtre au démarrage proprement maintenant que `logic`
+            // est appelé indépendamment de la visibilité.
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         }
 
-        // Drainer tous les évènements tray accumulés, ne toggle qu'une fois par "Up"
+        // Drainer les évènements tray re-émis par le thread de pompage.
         let mut toggle_to: Option<egui::Pos2> = None;
         let ppp = ctx.pixels_per_point().max(1.0);
-        while let Ok(event) = TrayIconEvent::receiver().try_recv() {
-            if matches!(
-                event,
-                TrayIconEvent::Click { .. } | TrayIconEvent::Enter { .. } | TrayIconEvent::Leave { .. }
-            ) {
-                debug!("Évènement tray: {event:?}");
-            }
+        while let Ok(event) = self.tray_rx.try_recv() {
             if let TrayIconEvent::Click {
                 button: tray_icon::MouseButton::Left,
                 button_state: tray_icon::MouseButtonState::Up,
@@ -74,7 +88,6 @@ impl eframe::App for CalendarApp {
                 ..
             } = event
             {
-                // rect est en pixels physiques → convertir en points logiques pour egui
                 let icon_center_x_phys = rect.position.x as f32 + rect.size.width as f32 / 2.0;
                 let icon_bottom_y_phys = rect.position.y as f32 + rect.size.height as f32;
                 let icon_center_x = icon_center_x_phys / ppp;
@@ -87,14 +100,17 @@ impl eframe::App for CalendarApp {
         if let Some(pos) = toggle_to {
             self.visible = !self.visible;
             info!("Toggle fenêtre → visible = {}", self.visible);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(self.visible));
             if self.visible {
                 self.refresh_icon();
                 self.unfocused_frames = 0;
                 self.frames_since_open = 0;
                 info!("Position cible: ({:.0}, {:.0})", pos.x, pos.y);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(WIN_W, WIN_H)));
                 ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             }
         }
 
@@ -106,9 +122,6 @@ impl eframe::App for CalendarApp {
         }
 
         // Fermer si la fenêtre perd le focus (clic en dehors).
-        // - Grâce de 20 frames après l'ouverture (le temps que macOS attribue le focus).
-        // - Il faut rester non-focus pendant 3 frames consécutives pour tolérer
-        //   les micro-pertes de focus liées au tray.
         if self.visible {
             self.frames_since_open = self.frames_since_open.saturating_add(1);
             let focused = ctx.input(|i| i.focused);
@@ -117,10 +130,6 @@ impl eframe::App for CalendarApp {
             } else {
                 self.unfocused_frames = self.unfocused_frames.saturating_add(1);
             }
-            debug!(
-                "focus={} unfocused_frames={} frames_since_open={}",
-                focused, self.unfocused_frames, self.frames_since_open
-            );
             if self.frames_since_open > 20 && self.unfocused_frames > 3 {
                 info!("Perte du focus stable → masquage");
                 self.visible = false;
@@ -128,14 +137,19 @@ impl eframe::App for CalendarApp {
             }
         }
 
-        // On dessine toujours le panel, peu importe la visibilité
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add_space(8.0);
-            self.calendar.show(ui);
-            ui.add_space(8.0);
-        });
-
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
+    }
+
+    /// Rendu UI — eframe 0.34 ne l'appelle que quand la fenêtre est visible.
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Peint le fond translucide nous-mêmes : en 0.34 le framework ne wrappe
+        // plus `App::ui` dans un CentralPanel utilisant `panel_fill`.
+        ui.painter()
+            .rect_filled(ui.max_rect(), PANEL_RADIUS, PANEL_BG);
+
+        ui.add_space(8.0);
+        self.calendar.show(ui);
+        ui.add_space(8.0);
     }
 }
 
@@ -147,8 +161,8 @@ fn main() -> eframe::Result<()> {
     info!("Démarrage de Calendarium (jour {day})");
     let rgba = icon::build_icon(day);
 
-    let tray_icon =
-        tray_icon::Icon::from_rgba(rgba, icon::ICON_SIZE, icon::ICON_SIZE).expect("Impossible de créer l'icône tray");
+    let tray_icon = tray_icon::Icon::from_rgba(rgba, icon::ICON_SIZE, icon::ICON_SIZE)
+        .expect("Impossible de créer l'icône tray");
 
     let tray = TrayIconBuilder::new()
         .with_icon(tray_icon)
@@ -163,13 +177,39 @@ fn main() -> eframe::Result<()> {
             .with_decorations(false)
             .with_resizable(false)
             .with_always_on_top()
-            .with_visible(false), // caché au démarrage
+            .with_transparent(true)
+            // macOS : pas d'ombre NSWindow par-dessus le contenu translucide.
+            .with_has_shadow(false)
+            .with_visible(false),
         ..Default::default()
     };
 
     eframe::run_native(
         "CalendarBar",
         options,
-        Box::new(|_cc| Ok(Box::new(CalendarApp::new(tray)))),
+        Box::new(|cc| {
+            // Pompage des évènements tray dans un thread dédié : on les ré-émet
+            // dans notre channel et on réveille le runloop egui après chaque
+            // évènement (essentiel pour rouvrir la fenêtre après Visible(false)).
+            let (tx, rx) = mpsc::channel::<TrayIconEvent>();
+            let ctx_clone = cc.egui_ctx.clone();
+            std::thread::spawn(move || {
+                let tray_rx = TrayIconEvent::receiver();
+                loop {
+                    match tray_rx.recv() {
+                        Ok(event) => {
+                            debug!("[tray-thread] event: {event:?}");
+                            if tx.send(event).is_err() {
+                                break;
+                            }
+                            ctx_clone.request_repaint();
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+
+            Ok(Box::new(CalendarApp::new(tray, rx)))
+        }),
     )
 }
