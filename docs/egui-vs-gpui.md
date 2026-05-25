@@ -132,13 +132,62 @@ Profil release : `opt-level = "z"`, `lto = true`, `codegen-units = 1`,
 
 ---
 
-## 4. À mesurer / décider ensuite
+## 4. Étape 2 — intégration du composant Calendar
 
-- [ ] Étape 2 — intégrer Calendar gpui-component, mesurer impact taille
+### Code
+
+```rust
+let calendar = cx.new(|cx| CalendarState::new(window, cx));
+// ...
+v_flex().size_full().p_3().child(Calendar::new(&self.calendar))
+```
+
+API à deux niveaux : `CalendarState` (entity stateful, possédée par la view)
+et `Calendar::new(&state)` (élément éphémère reconstruit à chaque render).
+Pattern classique GPUI : on n'instancie pas le widget, on instancie son état.
+
+### Frictions
+
+| Friction | Cause | Résolution |
+|---|---|---|
+| Colonne samedi tronquée, week 30 coupée | Fenêtre 270×300 trop étroite, les cellules ont un min-width qui pousse au-delà | Fenêtre 340×340 |
+| Boutons prev/next **invisibles mais cliquables** | Icônes SVG non chargées : `gpui_platform::application()` n'enregistre aucun asset provider par défaut | Ajouter `gpui-component-assets` et `.with_assets(Assets)` |
+| `Bounds::centered` veut `&App`, pas `AsyncApp` | Calculé avant `cx.spawn(...)`, pas dedans | Hoister hors du spawn |
+
+### Le piège des assets
+
+C'est un des points où GPUI/gpui-component est **moins forgiving** qu'egui :
+- egui embarque ses glyphes et icônes dans `epaint` → marche out-of-the-box.
+- gpui-component charge ses SVG via un `AssetSource` que **l'app doit fournir**.
+  Le crate `gpui-component-assets` les bundle via `rust-embed`, mais il faut
+  l'ajouter explicitement et appeler `.with_assets(Assets)`.
+
+Symptôme à retenir : **boutons fonctionnels mais invisibles** = assets manquants.
+
+### Comparaison visuelle vs widget egui actuel
+
+| | egui calendar | gpui-component Calendar |
+|---|---|---|
+| Largeur minimale lisible | ~250 px | ~330 px (plus aéré) |
+| Typo | bitmap via `ab_glyph` | CoreText (sous-pixel AA) |
+| Apparence | Custom-maison | Design shadcn-like, theming intégré |
+| Navigation année | Non | Oui (clic sur année → vue année) |
+
+### Coût après ajout des assets
+
+- Build chaud : +1 crate (`rust-embed` + `gpui-component-assets`), ~23 s.
+- Pas re-mesuré en release, à faire après l'étape 3.
+
+---
+
+## 5. À mesurer / décider ensuite
+
 - [ ] Étape 3 — câblage `tray-icon` → fenêtre GPUI (main thread macOS)
 - [ ] Translucidité fenêtre (équivalent `with_transparent(true)` + `with_has_shadow(false)`)
+- [ ] Pas de titlebar / traffic lights (menu bar dropdown style)
 - [ ] Click-outside-to-hide (équivalent de notre focus loss detection egui)
 - [ ] RSS au repos (process backgroundé, fenêtre cachée)
 - [ ] Empreinte disque `target/` complet
 - [ ] Cmd-Q / menu / handler de fermeture
 - [ ] LSUIElement (pas d'icône Dock) — vérifier comportement GPUI
+- [ ] Re-mesurer taille binaire release **après** étape 3 (vraie comparaison)
