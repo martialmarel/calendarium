@@ -23,7 +23,18 @@
       "Bash(xcode-select -p)",
       "Read(//Applications/**)",
       "Bash(xcrun -f metal)",
-      "Bash(pkill -f gpui_demo)"
+      "Bash(pkill -f gpui_demo)",
+      "Bash(grep -n \"fn render\\\\|prev\\\\|next\\\\|chevron\\\\|caret\\\\|button\\\\|header\\\\|month_year\\\\|nav\" /Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/196b925/crates/ui/src/time/calendar.rs | head -30)",
+      "Read(//Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/196b925/crates/ui/src/time/**)",
+      "Bash(grep -rn \"pub fn init\\\\|fn init\\(\" /Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/196b925/crates/ui/src/lib.rs | head -5 && echo \"---\" && grep -rn \"Theme::init\\\\|window_background\\\\|appearance\\\\|WindowOptions\" /Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/196b925/crates/story/examples/*.rs | head -20)",
+      "Read(//Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/196b925/crates/ui/src/**)",
+      "Read(//Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/196b925/crates/story/examples/**)",
+      "Bash(./target/debug/gpui_demo)",
+      "Bash(echo \"running, PID=$!\")",
+      "Bash(echo \"PID=$!\")",
+      "Bash(grep -rn \"with_assets\\\\|Assets\\\\|AssetSource\" /Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/196b925/crates/story/examples/*.rs | head -10 && echo \"---\" && find /Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8 -name \"assets*.rs\" -not -path \"*/target/*\" | head -5)",
+      "Read(//Users/martial/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/**)",
+      "Bash(git reset *)"
     ],
     "additionalDirectories": [
       "/tmp"
