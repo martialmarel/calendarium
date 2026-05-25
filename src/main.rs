@@ -202,26 +202,17 @@ fn main() -> eframe::Result<()> {
         "CalendarBar",
         options,
         Box::new(|cc| {
-            // Pompage des évènements tray dans un thread dédié : on les ré-émet
-            // dans notre channel et on réveille le runloop egui après chaque
-            // évènement (essentiel pour rouvrir la fenêtre après Visible(false)).
+            // Au lieu d'un thread qui poll `TrayIconEvent::receiver()`, on
+            // pose un callback global : tray-icon l'appelle directement
+            // depuis la callback OS (main thread sur macOS). On y empile
+            // l'event dans notre channel et on réveille le runloop egui.
             let (tx, rx) = mpsc::channel::<TrayIconEvent>();
             let ctx_clone = cc.egui_ctx.clone();
-            std::thread::spawn(move || {
-                let tray_rx = TrayIconEvent::receiver();
-                loop {
-                    match tray_rx.recv() {
-                        Ok(event) => {
-                            debug!("[tray-thread] event: {event:?}");
-                            if tx.send(event).is_err() {
-                                break;
-                            }
-                            ctx_clone.request_repaint();
-                        }
-                        Err(_) => break,
-                    }
-                }
-            });
+            TrayIconEvent::set_event_handler(Some(move |event| {
+                debug!("[tray-handler] event: {event:?}");
+                let _ = tx.send(event);
+                ctx_clone.request_repaint();
+            }));
 
             Ok(Box::new(CalendarApp::new(tray, rx)))
         }),
