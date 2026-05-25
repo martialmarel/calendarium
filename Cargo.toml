@@ -6,6 +6,14 @@ license = "AGPL-3.0-or-later"
 description = "macOS menu bar calendar — a Day-O replacement for Apple Silicon"
 repository = "https://github.com/martialmarel/calendarium"
 
+[[bin]]
+name = "calendarium"
+path = "src/main.rs"
+
+[[bin]]
+name = "gpui_demo"
+path = "src/bin/gpui_demo.rs"
+
 [dependencies]
 eframe = { version = "0.34", default-features = false, features = ["glow", "default_fonts"] }
 egui = "0.34"
@@ -17,9 +25,18 @@ log = "0.4"
 ab_glyph = "0.2"
 env_logger = { version = "0.11", optional = true }
 
+# GPUI experiment (feat/try-gpui)
+gpui = { git = "https://github.com/zed-industries/zed", optional = true }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"], optional = true }
+gpui-component = { git = "https://github.com/longbridge/gpui-component", optional = true }
+
 [features]
 default = ["logs"]
 logs = ["dep:env_logger"]
+gpui-experiment = ["dep:gpui", "dep:gpui_platform", "dep:gpui-component"]
+
+[patch.crates-io]
+psm = { git = "https://github.com/rust-lang/stacker", branch = "master" }
 
 [profile.release]
 opt-level = "z"      # optimise pour la taille
