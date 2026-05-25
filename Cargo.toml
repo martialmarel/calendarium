@@ -11,8 +11,19 @@ tray-icon = "0.19"
 # Pour générer l'icône dynamiquement (le chiffre du jour)
 image = { version = "0.25", default-features = false }
 log = "0.4"
-env_logger = "0.11"
 ab_glyph = "0.2"
+env_logger = { version = "0.11", optional = true }
+
+[features]
+default = ["logs"]
+logs = ["dep:env_logger"]
+
+[profile.release]
+opt-level = "z"      # optimise pour la taille
+lto = true           # link-time optimization complet
+codegen-units = 1    # une seule unité → meilleure optimisation inter-module
+strip = "symbols"    # retire les symboles de debug
+panic = "abort"      # pas de stack unwinding → -100 à 300 KB
 
 [target.'cfg(target_os = "macos")'.build-dependencies]
 # LSUIElement = pas d'icône dans le Dock

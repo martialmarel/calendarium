@@ -5,7 +5,7 @@
 //! SUPER_SCALE× puis on downscale en Lanczos3 pour antialiaser proprement
 //! les courbes du cadre.
 
-use ab_glyph::{point, Font, FontVec, PxScale, ScaleFont};
+use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
 use image::{imageops::FilterType, ImageBuffer, Rgba};
 use log::warn;
 use std::sync::OnceLock;
@@ -22,25 +22,41 @@ const FONT_CANDIDATES: &[(&str, u32)] = &[
     ("/System/Library/Fonts/Helvetica.ttc", 0),     // Regular
 ];
 
-fn load_font() -> Option<FontVec> {
+/// Données de la fonte (octets bruts + index dans le TTC), chargée une seule fois.
+struct SystemFont {
+    bytes: Vec<u8>,
+    index: u32,
+}
+
+fn load_font() -> Option<SystemFont> {
     for (path, idx) in FONT_CANDIDATES {
         match std::fs::read(path) {
-            Ok(data) => match FontVec::try_from_vec_and_index(data, *idx) {
-                Ok(font) => {
+            Ok(data) => {
+                // Vérifie que ab_glyph sait parser cette face avant de la cacher.
+                if FontRef::try_from_slice_and_index(&data, *idx).is_ok() {
                     log::info!("Fonte chargée: {path} (index {idx})");
-                    return Some(font);
+                    return Some(SystemFont {
+                        bytes: data,
+                        index: *idx,
+                    });
+                } else {
+                    warn!("Échec parse {path} idx={idx}");
                 }
-                Err(e) => warn!("Échec parse {path} idx={idx}: {e}"),
-            },
+            }
             Err(e) => warn!("Lecture {path} impossible: {e}"),
         }
     }
     None
 }
 
-fn font() -> Option<&'static FontVec> {
-    static FONT: OnceLock<Option<FontVec>> = OnceLock::new();
+fn system_font() -> Option<&'static SystemFont> {
+    static FONT: OnceLock<Option<SystemFont>> = OnceLock::new();
     FONT.get_or_init(load_font).as_ref()
+}
+
+fn font() -> Option<FontRef<'static>> {
+    let sf = system_font()?;
+    FontRef::try_from_slice_and_index(&sf.bytes, sf.index).ok()
 }
 
 fn blend_px(pixels: &mut [u8], x: i32, y: i32, color: [u8; 3], coverage: f32) {
@@ -149,7 +165,7 @@ fn draw_frame(pixels: &mut [u8], color: [u8; 4]) {
 /// Dessine le texte centré dans la zone (cx_min..cx_max, cy_min..cy_max).
 fn draw_text_centered(
     pixels: &mut [u8],
-    font: &FontVec,
+    font: &FontRef<'_>,
     text: &str,
     cx_min: i32,
     cy_min: i32,
@@ -231,7 +247,7 @@ pub fn build_icon(day: u32) -> Vec<u8> {
 
     match font() {
         Some(f) => {
-            draw_text_centered(&mut pixels, f, &text, zone_x0, zone_y0, zone_x1, zone_y1, fg_rgb);
+            draw_text_centered(&mut pixels, &f, &text, zone_x0, zone_y0, zone_x1, zone_y1, fg_rgb);
         }
         None => {
             warn!("Aucune fonte système chargée — icône sans chiffre");
