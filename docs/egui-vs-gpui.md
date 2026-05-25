@@ -236,13 +236,50 @@ icône à minuit, performance hidden-state.
 
 ---
 
-## 6. À mesurer / décider ensuite
+## 6. Étape 4 — click-outside-to-hide
 
-- [ ] Click-outside-to-hide (sur `WindowKind::PopUp`, voir `on_focus_out` /
-      `window.observe_blur` ou détection au niveau NSWindow)
+### API utilisée
+
+GPUI n'expose pas d'observer public pour les changements d'activation
+de fenêtre (`activation_observers` est `pub(crate)`). Mais
+`Window::is_window_active()` est public et lisible depuis n'importe quel
+`update()`. On greffe la vérification sur la boucle de polling 50 ms
+existante.
+
+### Algorithme
+
+```text
+chaque 50 ms:
+  drain events tray → traiter (toggle ouvert/fermé)
+  si fenêtre ouverte ET ouverte depuis > 300 ms ET !is_window_active():
+    fermer la fenêtre
+```
+
+Deux détails de robustesse :
+1. **Délai de grâce de 300 ms** après ouverture : sans ça, on ferme
+   instantanément car macOS n'a pas encore activé la fenêtre fraîchement
+   créée.
+2. **Debounce de 200 ms** sur le re-clic tray : quand l'utilisateur
+   clique sur l'icône tray alors que la fenêtre est ouverte, le clic
+   retire d'abord le focus de la fenêtre (→ on ferme via focus loss),
+   *puis* l'event tray arrive (→ on ouvrirait une nouvelle fenêtre).
+   Sans debounce, on verrait close-puis-réouvre instantané.
+
+### Bilan
+
+Avec ces deux ajouts, le comportement est identique à l'app egui actuelle
+côté UX (l'app egui utilise une heuristique similaire :
+`frames_since_open > 20 && unfocused_frames > 3`).
+
+Coût : ~30 lignes de plus, aucune dépendance supplémentaire.
+
+---
+
+## 7. À mesurer / décider ensuite
+
 - [ ] Translucidité fenêtre (`WindowBackgroundAppearance::Transparent` côté
       macOS — vérifier si suffisant pour effet vibrancy / blur)
-- [ ] Escape pour fermer
+- [ ] Escape pour fermer (équivalent du keystroke egui)
 - [ ] RSS au repos vs egui (mesure runtime)
 - [ ] Empreinte disque `target/` complet
 - [ ] Backing scale factor réel (écrans externes non-2x)
