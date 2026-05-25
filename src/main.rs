@@ -79,11 +79,7 @@ impl eframe::App for CalendarApp {
         // On dessine toujours le panel, peu importe la visibilité
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                ui.add_space(8.0);
-                self.calendar.show(ui);
-                ui.add_space(8.0);
-            });
+            self.calendar.show(ui);
             ui.add_space(8.0);
         });
 
