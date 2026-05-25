@@ -4,7 +4,10 @@
       "Bash(cargo build *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(cargo tree *)",
+      "Read(//Users/martial/Docs-storage/dev-storage/dev-projects/calendarium/src/**)",
+      "Bash(cargo bloat *)"
     ]
   }
 }
