@@ -29,7 +29,7 @@ mod app {
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::mpsc;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 
     pub struct CalendarView {
@@ -112,11 +112,19 @@ mod app {
                     let _ = tx.send(evt);
                 }));
 
-                // État partagé entre la tâche de polling et les updates main thread.
-                let active: Rc<RefCell<Option<WindowHandle<Root>>>> =
-                    Rc::new(RefCell::new(None));
+                struct ActiveWin {
+                    handle: WindowHandle<Root>,
+                    opened_at: Instant,
+                }
 
-                // Tâche async qui poll le channel tray toutes les 50 ms.
+                // État partagé entre la tâche de polling et les updates main thread.
+                let active: Rc<RefCell<Option<ActiveWin>>> = Rc::new(RefCell::new(None));
+                // Dernier instant de fermeture, pour ignorer le re-click tray qui
+                // suit immédiatement une fermeture par perte de focus.
+                let last_closed: Rc<RefCell<Option<Instant>>> = Rc::new(RefCell::new(None));
+
+                // Tâche async qui poll le channel tray toutes les 50 ms ET
+                // vérifie la perte de focus de la fenêtre.
                 // On *déplace* le tray dans la future pour le garder vivant —
                 // sinon il serait droppé à la fin du callback et le NSStatusItem
                 // disparaîtrait avant même d'apparaître.
@@ -126,16 +134,15 @@ mod app {
                         cx.background_executor()
                             .timer(Duration::from_millis(50))
                             .await;
-                        // Drain non-bloquant.
+                        // Drain non-bloquant des évènements tray.
                         let mut events = Vec::new();
                         while let Ok(evt) = rx.try_recv() {
                             events.push(evt);
                         }
-                        if events.is_empty() {
-                            continue;
-                        }
                         let active = active.clone();
+                        let last_closed = last_closed.clone();
                         let _ = cx.update(move |cx| {
+                            // 1. Traiter les clics tray.
                             for evt in events {
                                 if let TrayIconEvent::Click {
                                     button: tray_icon::MouseButton::Left,
@@ -145,11 +152,21 @@ mod app {
                                 } = evt
                                 {
                                     let mut slot = active.borrow_mut();
-                                    if let Some(handle) = slot.take() {
-                                        let _ = handle.update(cx, |_, window, _| {
+                                    if let Some(a) = slot.take() {
+                                        let _ = a.handle.update(cx, |_, window, _| {
                                             window.remove_window();
                                         });
+                                        *last_closed.borrow_mut() = Some(Instant::now());
                                     } else {
+                                        // Debounce : si on vient de fermer (perte de focus
+                                        // ou tray click), un nouveau clic tray est
+                                        // probablement la suite du même geste — on l'ignore.
+                                        if last_closed
+                                            .borrow()
+                                            .map_or(false, |t| t.elapsed() < Duration::from_millis(200))
+                                        {
+                                            continue;
+                                        }
                                         // tray-icon retourne des pixels PHYSIQUES sur macOS,
                                         // GPUI veut des pixels logiques. Sur Apple Silicon
                                         // le scale est toujours 2.0 (Retina). TODO: lire le
@@ -162,8 +179,34 @@ mod app {
                                             y: (rect.position.y as f32 + rect.size.height as f32)
                                                 / scale,
                                         };
-                                        *slot = Some(open_window(cx, anchor));
+                                        *slot = Some(ActiveWin {
+                                            handle: open_window(cx, anchor),
+                                            opened_at: Instant::now(),
+                                        });
                                     }
+                                }
+                            }
+
+                            // 2. Détecter la perte de focus → fermer.
+                            // Délai de grâce de 300 ms après ouverture sinon
+                            // on fermerait avant même que macOS ait activé la fenêtre.
+                            let mut slot = active.borrow_mut();
+                            let should_close = slot
+                                .as_ref()
+                                .filter(|a| a.opened_at.elapsed() > Duration::from_millis(300))
+                                .map(|a| {
+                                    a.handle
+                                        .update(cx, |_, window, _| window.is_window_active())
+                                        .map(|active| !active)
+                                        .unwrap_or(false)
+                                })
+                                .unwrap_or(false);
+                            if should_close {
+                                if let Some(a) = slot.take() {
+                                    let _ = a.handle.update(cx, |_, window, _| {
+                                        window.remove_window();
+                                    });
+                                    *last_closed.borrow_mut() = Some(Instant::now());
                                 }
                             }
                         });
