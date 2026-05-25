@@ -146,9 +146,11 @@ impl eframe::App for CalendarApp {
         ui.painter()
             .rect_filled(ui.max_rect(), PANEL_RADIUS, PANEL_BG);
 
-        ui.add_space(8.0);
-        self.calendar.show(ui);
-        ui.add_space(8.0);
+        egui::Frame::new()
+            .inner_margin(egui::Margin::symmetric(12, 10))
+            .show(ui, |ui| {
+                self.calendar.show(ui);
+            });
     }
 }
 
