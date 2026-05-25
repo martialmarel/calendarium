@@ -13,7 +13,17 @@
       "Bash(grep -A 3 \"pub const fn from_rgba\" /Users/martial/.cargo/registry/src/index.crates.io-*/ecolor-*/src/color32.rs 2>/dev/null | head -30)",
       "Read(//Users/martial/.cargo/registry/src/**)",
       "Bash(curl -s https://www.gnu.org/licenses/agpl-3.0.txt -o /Users/martial/Docs-storage/dev-projects/calendarium/LICENSE)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "WebFetch(domain:longbridge.github.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s https://api.github.com/repos/longbridge/gpui-component/contents/crates/story/examples)",
+      "Bash(curl -s https://api.github.com/repos/longbridge/gpui-component/contents/crates)",
+      "Bash(cargo check *)",
+      "Bash(cargo update *)",
+      "Bash(xcode-select -p)",
+      "Read(//Applications/**)",
+      "Bash(xcrun -f metal)",
+      "Bash(pkill -f gpui_demo)"
     ],
     "additionalDirectories": [
       "/tmp"
