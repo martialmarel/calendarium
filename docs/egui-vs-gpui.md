@@ -314,11 +314,84 @@ fond solide en egui (qui peint un `Color32` translucide sans vrai blur).
 
 ---
 
-## 8. À mesurer / décider ensuite
+## 8. Mesures finales
 
-- [ ] RSS au repos vs egui (mesure runtime)
-- [ ] Empreinte disque `target/` complet
+Après avoir câblé l'équivalent fonctionnel de l'app egui (tray, Calendar,
+toggle, click-outside, Escape, vibrancy), comparaison équitable.
+
+### Binaire release (`--release --no-default-features`)
+
+| Binaire | Taille |
+|---|---|
+| `calendarium` (egui — tray + calendar custom + icône dynamique) | **3.9 Mo** |
+| `gpui_demo` (GPUI — tray + Calendar gpui-component + theming + vibrancy) | **5.5 Mo** |
+
+Surcoût GPUI : **+1.6 Mo (+40%)**. Loin du blowup redouté à plusieurs
+dizaines de Mo. LTO + `opt-level=z` + `strip` font un travail féroce
+d'élagage.
+
+### RSS au repos (fenêtre fermée, juste tray vivant)
+
+| Binaire | RSS |
+|---|---|
+| `calendarium` (egui) | **108 Mo** |
+| `gpui_demo` (GPUI) | **44.7 Mo** |
+
+GPUI utilise **2.4× moins de RAM** au repos. Hypothèse : `eframe` initialise
+un contexte OpenGL + viewport dès le démarrage, même fenêtre cachée. Notre
+code GPUI n'ouvre la fenêtre qu'au clic tray, donc pas de pipeline graphique
+alloué tant qu'on n'a pas cliqué.
+
+Mesure non faite : RSS avec fenêtre ouverte. Probablement plus proche.
+
+### Empreinte disque `target/`
+
+- Sans `gpui-experiment` : ~600 Mo
+- Avec `gpui-experiment` : **9.9 Go**
+
+C'est le **vrai prix** de GPUI : tirer tout Zed via git, ses dépendances
+transitives Wayland/X11/Windows pour cross-platform, plus rust-embed avec
+les assets bundlés. Sur disque, c'est ~16× plus volumineux.
+
+### Temps de build
+
+- Cold (cargo fetch + tout compiler) : ~10-20 min
+- Chaud (changement de notre code uniquement) : 2-3 s pour `check`, ~50 s
+  pour release build complet (LTO sur tout Zed).
+
+### Synthèse honnête
+
+| Critère | Gagnant | Note |
+|---|---|---|
+| Taille binaire | egui (légèrement) | GPUI à 40% en plus, mais sub-6 Mo |
+| RAM au repos | **GPUI** | Surprise positive |
+| Disque (`target/`) | **egui** (très clairement) | 16× plus volumineux côté GPUI |
+| Temps de compile cold | egui | GPUI = 10+ min la première fois |
+| Temps de compile chaud | match nul | GPUI un peu plus lent à cause de LTO |
+| Qualité de rendu (texte) | **GPUI** | CoreText sub-pixel vs `ab_glyph` |
+| Vibrancy / blur natif | **GPUI** | Vrai NSVisualEffectView vs Color32 |
+| API stabilité | **egui** | crates.io vs git-dep qui dérive |
+| Maturité macOS menu bar | **egui** | Pattern éprouvé, GPUI inédit |
+| Friction de mise en route | egui | GPUI = Xcode + Metal Toolchain requis |
+
+### Pour l'app calendarium
+
+Verdict perso après cette exploration : pour le **scope actuel** (un
+calendrier menu bar minimaliste), egui reste suffisant et bien plus
+léger à maintenir. **Mais** si l'app évolue vers du contenu plus riche
+(animations, événements de calendrier multi-jours, intégration iCal,
+themes système clair/sombre auto, search rapide façon Spotlight),
+GPUI deviendrait nettement plus intéressant — surtout vu la RAM plus
+basse et la vibrancy native.
+
+À garder en réserve, pas à appliquer aveuglément.
+
+---
+
+## 9. TODO restant (non bloquant pour la décision)
+
 - [ ] Backing scale factor réel (écrans externes non-2x)
-- [ ] LSUIElement (pas d'icône Dock) — `bundle` ou Info.plist requis
-- [ ] Re-mesurer taille binaire release **avec** toutes les features câblées
+- [ ] LSUIElement (pas d'icône Dock) — nécessite un bundle `.app` avec Info.plist
 - [ ] Theme dark mode + override propre (pas de mutation du theme par défaut)
+- [ ] RSS avec fenêtre OUVERTE (mesure complémentaire)
+- [ ] Refresh icône à minuit (équivalent du timer dans l'app egui)
